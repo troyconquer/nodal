@@ -1,18 +1,33 @@
-module.exports = (() => {
+'use strict';
 
-  'use strict';
+const Command = require('cmnd').Command;
 
-  const DatabaseCommand = require('../../database_command.js');
+class DBMigrateCommand extends Command {
 
-  return new DatabaseCommand(
-    'migrate',
-    {definition: 'Run all pending Database migrations'},
-    (args, flags, callback) => {
+  constructor() {
 
-      const bootstrapper = require('../../../core/my/bootstrapper.js');
-      bootstrapper.migrate(flags.step, callback);
+    super('db', 'migrate');
 
-    }
-  );
+  }
 
-})();
+  help() {
+
+    return {
+      description: 'An example command',
+      vflags: {
+        step: 'The number of steps to migrate (default: all)'
+      }
+    };
+
+  }
+
+  run(params, callback) {
+
+    const bootstrapper = require('../../../core/my/bootstrapper.js');
+    bootstrapper.migrate(params.vflags.step, callback);
+
+  }
+
+}
+
+module.exports = DBMigrateCommand;

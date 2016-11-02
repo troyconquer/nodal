@@ -1,6 +1,6 @@
-module.exports = (function(Nodal) {
+'use strict';
 
-  "use strict";
+module.exports = Nodal => {
 
   let expect = require('chai').expect;
 
@@ -11,8 +11,8 @@ module.exports = (function(Nodal) {
     let schemaParent = {
       table: 'parents',
       columns: [
-        {name: 'id', type: 'serial'},
-        {name: 'name', type: 'string'},
+        {name: 'id', type: 'serial', properties: {primary_key: true}},
+        {name: 'name', type: 'string', properties: { defaultValue: 'Keith'}},
         {name: 'age', type: 'int'},
         {name: 'secret', type: 'string'},
         {name: 'content', type: 'json'},
@@ -27,6 +27,12 @@ module.exports = (function(Nodal) {
     Parent.setSchema(schemaParent);
 
     Parent.validates('name', 'should be at least four characters long', v => v && v.length >= 4);
+
+    Parent.verifies('should wait 10ms and have age be greater than 0', (name, age, callback) => {
+      setTimeout(() => {
+        callback(parseInt(age) > 0);
+      }, 10);
+    });
 
     let schemaHouse = {
       table: 'houses',
@@ -145,6 +151,14 @@ module.exports = (function(Nodal) {
       expect(parent.hasErrors()).to.equal(true);
       parent.set('name', 'abcdef');
       expect(parent.hasErrors()).to.equal(false);
+
+    });
+
+    it('should return default value', function() {
+
+      let parent = new Parent();
+      expect(parent.fieldDefaultValue('name')).to.equal('Keith');
+      expect(parent.fieldDefaultValue('secret')).to.equal(null);
 
     });
 
@@ -282,7 +296,7 @@ module.exports = (function(Nodal) {
 
     describe('#save', function() {
 
-      it('should refuse to save with error', function(done) {
+      it('should refuse to save with validator error', function(done) {
 
         let parent = new Parent();
         parent.save(function(err, model) {
@@ -294,9 +308,21 @@ module.exports = (function(Nodal) {
 
       });
 
-      it('should save with no errors', function(done) {
+      it('should refuse to save with verifier error', function(done) {
 
         let parent = new Parent({name: 'abcdef'});
+        parent.save(function(err, model) {
+          expect(err).to.exist;
+          expect(model).to.equal(parent);
+          expect(model.inStorage()).to.equal(false);
+          done();
+        });
+
+      });
+
+      it('should save with no errors', function(done) {
+
+        let parent = new Parent({name: 'abcdef', age: 2});
         parent.save(function(err, model) {
           expect(err).to.equal(null);
           expect(model).to.equal(parent);
@@ -308,7 +334,7 @@ module.exports = (function(Nodal) {
 
       it('should save initially and update afterwards', function(done) {
 
-        let parent = new Parent({name: '123456'});
+        let parent = new Parent({name: '123456', age: 2});
         parent.save(function(err, model) {
           expect(err).to.equal(null);
           model.set('name', 'infinity');
@@ -321,12 +347,112 @@ module.exports = (function(Nodal) {
 
       });
 
+      it('should create Parent via Parent.create', done => {
+
+        Parent.create({name: 'parent', age: 30}, (err, parent) => {
+
+          expect(err).to.not.exist;
+          expect(parent).to.exist;
+          done();
+
+        });
+
+      });
+
+      it('should create Parent via Parent.create, destroy via Parent.destroy', done => {
+
+        Parent.create({name: 'parent', age: 30}, (err, parent) => {
+
+          expect(err).to.not.exist;
+          expect(parent).to.exist;
+
+          Parent.destroy(parent.get('id'), (err, parent) => {
+
+            expect(err).to.not.exist;
+            expect(parent.inStorage()).to.equal(false);
+            done();
+
+          });
+
+        });
+
+      });
+
+      it('should create Parent via Parent.create, find by Parent.find', done => {
+
+        Parent.create({name: 'parent', age: 30}, (err, parent) => {
+
+          expect(err).to.not.exist;
+          expect(parent).to.exist;
+
+          Parent.find(parent.get('id'), (err, parent) => {
+
+            expect(err).to.not.exist;
+            expect(parent.inStorage()).to.equal(true);
+            done();
+
+          });
+
+        });
+
+      });
+
+      it('should create Parent via Parent.create, find by Parent.findBy', done => {
+
+        Parent.create({name: 'parent_findby', age: 30}, (err, parent) => {
+
+          expect(err).to.not.exist;
+          expect(parent).to.exist;
+
+          Parent.findBy('name', 'parent_findby', (err, parent) => {
+
+            expect(err).to.not.exist;
+            expect(parent.inStorage()).to.equal(true);
+            done();
+
+          });
+
+        });
+
+      });
+
+      it('Should create via findOrCreateBy', done => {
+
+        Parent.findOrCreateBy('name', {name: 'parent_unique', age: 30}, (err, parent) => {
+
+          expect(err).to.not.exist;
+          expect(parent).to.exist;
+          done();
+
+        });
+
+      });
+
+      it('Should find via findOrCreateBy', done => {
+
+        Parent.create({name: 'parent_unique_2', age: 30}, (err, parent) => {
+
+          expect(err).to.not.exist;
+          expect(parent).to.exist;
+
+          Parent.findOrCreateBy('name', {name: 'parent_unique_2', age: 30}, (err, parent) => {
+
+            expect(err).to.not.exist;
+            expect(parent).to.exist;
+            done();
+
+          });
+
+        });
+
+      });
+
       it('should save multiple parents', function(done) {
 
         let parents = new Nodal.ModelArray(Parent);
 
         for (let i = 0; i < 10; i++) {
-          parents.push(new Parent({name: 'Parent_' + i}));
+          parents.push(new Parent({name: 'Parent_' + i, age: 20}));
         }
 
         parents.saveAll((err, modelArray) => {
@@ -363,7 +489,7 @@ module.exports = (function(Nodal) {
       let ParentFactory = new Nodal.ModelFactory(Parent);
       let HouseFactory = new Nodal.ModelFactory(House);
 
-      it('should save all parents', (done) => {
+      it('should not save all parents with verification errors', (done) => {
 
         ParentFactory.create([
           {name: 'Kate'},
@@ -372,10 +498,23 @@ module.exports = (function(Nodal) {
           {name: 'Sawyer'},
         ], (err, models) => {
 
-          if (err) {
-            console.log(err);
-            process.exit(0);
-          }
+          expect(err).to.exist;
+          done();
+
+        });
+
+      });
+
+      it('should save all parents', (done) => {
+
+        ParentFactory.create([
+          {name: 'Kate', age: 20},
+          {name: 'Sayid', age: 20},
+          {name: 'Jack', age: 20},
+          {name: 'Sawyer', age: 20},
+        ], (err, models) => {
+
+          expect(err).to.not.exist;
 
           let data = ['Kate', 'Sayid', 'Jack', 'Sawyer'];
 
@@ -388,7 +527,7 @@ module.exports = (function(Nodal) {
 
       });
 
-      it('should save data from both Parents and Houses', (done) => {
+      it('should not save data from both Parents and Houses with verification errors', (done) => {
 
         Nodal.ModelFactory.createFromModels(
           [Parent, House],
@@ -404,7 +543,31 @@ module.exports = (function(Nodal) {
           },
           (err, results) => {
 
-            expect(err).to.equal(null);
+            expect(err).to.exist;
+            done();
+
+          }
+        );
+
+      });
+
+      it('should save data from both Parents and Houses', (done) => {
+
+        Nodal.ModelFactory.createFromModels(
+          [Parent, House],
+          {
+            Parent: [
+              {name: 'Hurley', age: 20},
+              {name: 'Boone', age: 20}
+            ],
+            House: [
+              {material: 'straw'},
+              {material: 'wood'}
+            ]
+          },
+          (err, results) => {
+
+            expect(err).to.not.exist;
             expect(results.length).to.equal(2);
 
             let parents = results[0];
@@ -424,4 +587,4 @@ module.exports = (function(Nodal) {
 
   });
 
-});
+};

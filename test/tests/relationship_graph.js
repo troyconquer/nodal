@@ -1,6 +1,6 @@
-module.exports = (function(Nodal) {
+'use strict';
 
-  'use strict';
+module.exports = Nodal => {
 
   const async = require('async');
 
@@ -155,4 +155,4 @@ module.exports = (function(Nodal) {
 
   });
 
-});
+};

@@ -1,18 +1,33 @@
-module.exports = (() => {
+'use strict';
 
-  'use strict';
+const Command = require('cmnd').Command;
 
-  const DatabaseCommand = require('../../database_command.js');
+class DBRollbackCommand extends Command {
 
-  return new DatabaseCommand(
-    'rollback',
-    {definition: 'Rollback migrations'},
-    (args, flags, callback) => {
+  constructor() {
 
-      const bootstrapper = require('../../../core/my/bootstrapper.js');
-      bootstrapper.rollback(flags.step, callback);
+    super('db', 'rollback');
 
-    }
-  );
+  }
 
-})();
+  help() {
+
+    return {
+      description: 'Rollback completed migrations',
+      vflags: {
+        step: 'Number of steps to rollback (default: 1)'
+      }
+    };
+
+  }
+
+  run(params, callback) {
+
+    const bootstrapper = require('../../../core/my/bootstrapper.js');
+    bootstrapper.rollback(params.vflags.step, callback);
+
+  }
+
+}
+
+module.exports = DBRollbackCommand;

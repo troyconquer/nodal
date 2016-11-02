@@ -1,22 +1,34 @@
-module.exports = (() => {
+'use strict';
 
-  'use strict';
+const Command = require('cmnd').Command;
 
-  const Command = require('../command.js');
+class ServerCommand extends Command {
 
-  return new Command(
-    null,
-    's',
-    {order: 2},
-    (args, flags, callback) => {
+  constructor() {
 
-      let spawn = require('cross-spawn-async');
-      let child = spawn('npm',  ['start'], {stdio: 'inherit'});
+    super('s');
 
-      process.on('exit', function() {
-        child && child.kill();
-      });
+  }
 
-  });
+  help() {
 
-})();
+    return {
+      description: 'Starts your Nodal Server'
+    };
+
+  }
+
+  run(params, callback) {
+
+    let spawn = require('cross-spawn-async');
+    let child = spawn('npm',  ['start'], {stdio: 'inherit'});
+
+    process.on('exit', function() {
+      child && child.kill();
+    });
+
+  }
+
+}
+
+module.exports = ServerCommand;

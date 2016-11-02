@@ -1,18 +1,30 @@
-module.exports = (() => {
+'use strict';
 
-  'use strict';
+const Command = require('cmnd').Command;
 
-  const DatabaseCommand = require('../../database_command.js');
+class DBSeedCommand extends Command {
 
-  return new DatabaseCommand(
-    'seed',
-    {definition: 'Populate database with default data'},
-    (args, flags, callback) => {
+  constructor() {
 
-      const bootstrapper = require('../../../core/my/bootstrapper.js');
-      bootstrapper.seed(callback);
+    super('db', 'seed');
 
-    }
-  );
+  }
 
-})();
+  help() {
+
+    return {
+      description: `Seeds the database with data in './config/seed.json'`
+    };
+
+  }
+
+  run(params, callback) {
+
+    const bootstrapper = require('../../../core/my/bootstrapper.js');
+    bootstrapper.seed(callback);
+
+  }
+
+}
+
+module.exports =  DBSeedCommand;

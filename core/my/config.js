@@ -1,44 +1,42 @@
-module.exports = (() => {
+'use strict';
 
-  'use strict';
+// Load env anew every time config is loaded
+const env = require('./../env.js')();
 
-  const env = require('./../env.js');
+const fs = require('fs');
+const path = require('path');
+const dot = require('dot');
 
-  const fs = require('fs');
-  const dot = require('dot');
+let config = {};
 
-  let config = {};
+let varname = dot.templateSettings.varname;
 
-  let varname = dot.templateSettings.varname;
+dot.templateSettings.varname = 'env';
 
-  dot.templateSettings.varname = 'env';
+let dir = path.join(env.rootDirectory, 'config');
+let configFiles = fs.readdirSync(dir);
 
-  let dir = env.rootDirectory + '/config';
-  let configFiles = fs.readdirSync(dir);
+const ext = '.json';
 
-  let ext = '.json';
+configFiles.filter(function(filename) {
+  let name = path.basename(filename, ext);
+  return !config[name] && path.extname(filename) === ext;
+}).forEach(function(filename) {
 
-  configFiles.filter(function(filename) {
-    let name = filename.substr(0, filename.length - ext.length);
-    return !config[name] && filename.substr(filename.length - ext.length) === ext;
-  }).forEach(function(filename) {
+  let configData;
 
-    let configData;
+  try {
+    configData = fs.readFileSync(path.join(dir, filename));
+    configData = dot.template(configData)(process.env);
+    configData = JSON.parse(configData);
+  } catch(e) {
+    throw new Error(`Could not parse "config/${filename}": Invalid JSON`);
+  }
 
-    try {
-      configData = fs.readFileSync([dir, filename].join('/'));
-      configData = dot.template(configData)(process.env);
-      configData = JSON.parse(configData);
-    } catch(e) {
-      throw new Error(`Could not parse "config/${filename}": Invalid JSON`);
-    }
+  config[path.basename(filename, ext)] = configData[env.name];
 
-    config[filename.substr(0, filename.length - ext.length)] = configData[env.name];
+});
 
-  });
+dot.templateSettings.varname = varname;
 
-  dot.templateSettings.varname = varname;
-
-  return config;
-
-})();
+module.exports = config;

@@ -1,49 +1,70 @@
-module.exports = (() => {
+'use strict';
 
-  'use strict';
+const fs = require('fs');
+const async = require('async');
+const colors = require('colors/safe');
 
-  const fs = require('fs');
-  const async = require('async');
-  const colors = require('colors/safe');
+const Database = require('../required/db/database.js');
+const SchemaGenerator = require('../required/db/schema_generator.js');
 
-  const Database = require('../required/db/database.js');
-  const SchemaGenerator = require('../required/db/schema_generator.js');
+const ModelFactory = require('../required/model_factory.js');
 
-  const ModelFactory = require('../required/model_factory.js');
+const Config = require('./config.js');
 
-  const Config = require('./config.js');
+const MIGRATION_PATH = './db/migrations';
 
-  const MIGRATION_PATH = './db/migrations';
+class Bootstrapper {
 
-  class Bootstrapper {
+  constructor() {
 
-    constructor() {
+    this.cfg = Config.db.main;
+    this.rootCfg = Object.create(this.cfg);
+    this.rootCfg.database = 'postgres';
 
-      this.cfg = Config.db.main;
-      this.rootCfg = Object.create(this.cfg);
-      this.rootCfg.database = 'postgres';
+  }
 
-      this.rootDb = new Database();
-      this.rootDb.connect(this.rootCfg);
+  rootDb() {
 
-    }
+    let rootDb = new Database();
+    rootDb.connect(this.rootCfg);
+    return rootDb;
 
-    create(callback) {
+  }
 
-      this.rootDb.create(this.cfg.database, callback);
+  connect(callback) {
 
-    }
+    let db = new Database();
 
-    drop(callback) {
-
-      this.rootDb.drop(this.cfg.database, callback);
-
-    }
-
-    prepare(callback) {
-
-      let db = new Database();
+    try {
       db.connect(this.cfg);
+    } catch (e) {
+      return callback(e);
+    }
+
+    callback(null, db);
+
+  }
+
+  create(callback) {
+
+    this.rootDb().create(this.cfg.database, callback);
+
+  }
+
+  drop(callback) {
+
+    this.rootDb().drop(this.cfg.database, callback);
+
+  }
+
+  prepare(callback) {
+
+    this.connect((err, db) => {
+
+      if (err) {
+        return callback(err);
+      }
+
       callback = this.wrapCallback(db, callback);
 
       let schema = new SchemaGenerator(db);
@@ -62,26 +83,31 @@ module.exports = (() => {
             return callback(err);
           }
 
-          db.info(`Prepared database "${db._config.database}" for migrations`);
           schema.save();
 
-          callback(null);
+          callback(null, `Prepared database "${db.adapter._config.database}" for migrations`);
 
         }
       );
 
-    }
+    });
 
-    version(callback) {
+  }
 
-      let db = new Database();
-      db.connect(this.cfg);
+  version(callback) {
+
+    this.connect((err, db) => {
+
+      if (err) {
+        return callback(err);
+      }
+
       callback = this.wrapCallback(db, callback);
 
       // Query schema by the Id column, descending
       let orderClause = [{
-        columnName: 'id',
-        direction: 'desc'
+        columnNames: ['id'],
+        direction: 'DESC'
       }];
 
       // Only fetch one row
@@ -97,6 +123,7 @@ module.exports = (() => {
           ['id'],
           null,
           null,
+          null,
           orderClause,
           limitClause
         ),
@@ -108,22 +135,26 @@ module.exports = (() => {
           }
 
           if (result.rows && result.rows.length) {
-            console.log(colors.green.bold('Current Schema Version: ') + result.rows[0].id);
+            return callback(null, `Schema version: ${result.rows[0].id}`);
           } else {
             return callback(new Error('No Migrations have been run'));
           }
 
-          callback(null);
-
         }
       );
 
-    }
+    });
 
-    migrate(steps, callback) {
+  }
 
-      let db = new Database();
-      db.connect(this.cfg);
+  migrate(steps, callback) {
+
+    this.connect((err, db) => {
+
+      if (err) {
+        return callback(err);
+      }
+
       callback = this.wrapCallback(db, callback);
 
       steps = steps || 0;
@@ -141,14 +172,13 @@ module.exports = (() => {
           let schema_ids = result.rows.map((v) => { return v.id; });
 
           let migrations = fs.readdirSync(MIGRATION_PATH).map((v) => {
+            if(v.indexOf('.') === 0) return {};
             return {
               id: parseInt(v.substr(0, v.indexOf('__'))),
               migration: new (require(process.cwd() + '/' + MIGRATION_PATH + '/' + v))(db)
             };
-          });
-
-          migrations = migrations.filter((v) => {
-            return schema_ids.indexOf(v.id) === -1;
+          }).filter((v) => {
+            return v.id && schema_ids.indexOf(v.id) === -1;
           });
 
           if (migrations.length === 0) {
@@ -177,8 +207,7 @@ module.exports = (() => {
                 return callback(err);
               }
 
-              console.log('Migration complete!');
-              callback(null);
+              callback(null, 'Migration completed successfully');
 
             }
           );
@@ -186,12 +215,18 @@ module.exports = (() => {
 
       });
 
-    }
+    });
 
-    rollback(steps, callback) {
+  }
 
-      let db = new Database();
-      db.connect(this.cfg);
+  rollback(steps, callback) {
+
+    this.connect((err, db) => {
+
+      if (err) {
+        return callback(err);
+      }
+
       callback = this.wrapCallback(db, callback);
 
       steps = steps || 1;
@@ -209,12 +244,13 @@ module.exports = (() => {
         let schema_ids = result.rows.map((v) => { return v.id; });
 
         let migrations = fs.readdirSync(MIGRATION_PATH).map((v) => {
+          if(v.indexOf('.') === 0) return {};
           return {
             id: parseInt(v.substr(0, v.indexOf('__'))),
             migration: new (require(process.cwd() + '/' + MIGRATION_PATH + '/' + v))(db)
           };
         }).filter((v) => {
-          return schema_ids.indexOf(v.id) !== -1;
+          return v.id && schema_ids.indexOf(v.id) !== -1;
         }).reverse();
 
         if (migrations.length === 0) {
@@ -240,20 +276,25 @@ module.exports = (() => {
               return callback(new Error('Migration rollback could not be completed'));
             }
 
-            console.log('Migration rollback complete!');
-            callback(null);
+            callback(null, 'Migration rollback complete!');
 
           }
         );
 
       });
 
-    }
+    });
 
-    seed(callback) {
+  }
 
-      let db = new Database();
-      db.connect(this.cfg);
+  seed(callback) {
+
+    this.connect((err, db) => {
+
+      if (err) {
+        return callback(err);
+      }
+
       callback = this.wrapCallback(db, callback);
 
       let seed = Config.seed;
@@ -264,34 +305,50 @@ module.exports = (() => {
 
       return ModelFactory.populate(seed, callback);
 
-    }
+    });
 
-    wrapCallback(db, callback) {
+  }
 
-      return (err) => {
-        let cb = callback;
-        err && (cb = cb.bind(null, err));
-        db.close(cb);
-      }
+  wrapCallback(db, callback) {
 
-    }
-
-    bootstrap(callback) {
-
-      async.series([
-        (cb) => this.prepare(cb),
-        (cb) => this.migrate(0, cb),
-        (cb) => this.seed(cb)
-      ], (err) => {
-
-        callback(err || null);
-
-      });
-
+    return (err) => {
+      let cb = callback;
+      err && (cb = cb.bind(null, err));
+      db.close(cb);
     }
 
   }
 
-  return new Bootstrapper();
+  bootstrap(callback) {
 
-})();
+    async.series([
+      (cb) => this.drop(cb),
+      (cb) => this.create(cb),
+      (cb) => this.prepare(cb),
+      (cb) => this.migrate(0, cb),
+      (cb) => this.seed(cb)
+    ], (err) => {
+
+      callback(err || null);
+
+    });
+
+  }
+
+  compose(callback) {
+
+    async.series([
+      (cb) => this.prepare(cb),
+      (cb) => this.migrate(0, cb),
+      (cb) => this.seed(cb)
+    ], (err) => {
+
+      callback(err || null);
+
+    });
+
+  }
+
+}
+
+module.exports = new Bootstrapper();

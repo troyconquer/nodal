@@ -1,6 +1,6 @@
-module.exports = (function(Nodal) {
+'use strict';
 
-  "use strict";
+module.exports = Nodal => {
 
   let expect = require('chai').expect;
 
@@ -33,12 +33,6 @@ module.exports = (function(Nodal) {
     it('should have Database constructor', function() {
 
       expect(Nodal.Database).to.be.a('function');
-
-    });
-
-    it('should have Middleware constructor', function() {
-
-      expect(Nodal.Middleware).to.be.a('function');
 
     });
 
@@ -86,4 +80,4 @@ module.exports = (function(Nodal) {
 
   });
 
-});
+};

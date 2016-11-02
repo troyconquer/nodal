@@ -1,18 +1,30 @@
-module.exports = (() => {
+'use strict';
 
-  'use strict';
+const Command = require('cmnd').Command;
 
-  const DatabaseCommand = require('../../database_command.js');
+class DBPrepareCommand extends Command {
 
-  return new DatabaseCommand(
-    'prepare',
-    {definition: 'Prepare the PostgreSQL database'},
-    (args, flags, callback) => {
+  constructor() {
 
-      const bootstrapper = require('../../../core/my/bootstrapper.js');
-      bootstrapper.prepare(callback);
+    super('db', 'prepare');
 
-    }
-  );
+  }
 
-})();
+  help() {
+
+    return {
+      description: 'Prepares your database for migrations (resets all data)'
+    };
+
+  }
+
+  run(params, callback) {
+
+    const bootstrapper = require('../../../core/my/bootstrapper.js');
+    bootstrapper.prepare(callback);
+
+  }
+
+}
+
+module.exports = DBPrepareCommand;
